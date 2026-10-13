@@ -11,3 +11,6 @@ class ChatResponse(BaseModel):
     prompt_tokens: int
     completion_tokens: int
     latency_ms: int
+
+class HealthResponse(BaseModel):
+    status: str

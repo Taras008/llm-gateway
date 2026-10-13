@@ -1,20 +1,32 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
-from app import ollama_client
-from app.schemas import ChatRequest, ChatResponse
+import time
 
+from fastapi import Depends, FastAPI
+
+from app.llm.base import LLMProvider
+from app.llm.factory import get_provider
+from app.schemas import ChatRequest, ChatResponse, HealthResponse
 
 app = FastAPI(title="llm-gateway")
-
-
-class HealthResponse(BaseModel):
-    status: str
 
 
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
 
+
 @app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest) -> ChatResponse:
-    return await ollama_client.chat(request.message)
+async def chat(
+    request: ChatRequest,
+    provider: LLMProvider = Depends(get_provider),
+) -> ChatResponse:
+    start = time.perf_counter()
+    result = await provider.chat(request.message)
+    latency_ms = int((time.perf_counter() - start) * 1000)
+
+    return ChatResponse(
+        answer=result.text,
+        model=result.model,
+        prompt_tokens=result.prompt_tokens,
+        completion_tokens=result.completion_tokens,
+        latency_ms=latency_ms,
+    )
