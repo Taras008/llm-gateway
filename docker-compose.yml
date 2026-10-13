@@ -14,5 +14,20 @@ services:
       interval: 5s
       retries: 5
 
+  api:
+    build: .
+    environment:
+      LLM_PROVIDER: ollama
+      # Ollama працює на Mac нативно (GPU), а не в контейнері
+      OLLAMA_URL: http://host.docker.internal:11434
+      DATABASE_URL: postgresql+asyncpg://gateway:gateway@db:5432/gateway
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   pgdata:

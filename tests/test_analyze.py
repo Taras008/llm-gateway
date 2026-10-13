@@ -8,7 +8,9 @@ def use_fake_answer(text: str) -> None:
 
 
 def test_analyze_returns_parsed_analysis(client):
-    use_fake_answer('{"sentiment": "negative", "topics": ["delivery"], "summary": "Late delivery."}')
+    use_fake_answer(
+        '{"sentiment": "negative", "topics": ["delivery"], "summary": "Late delivery."}'
+    )
 
     response = client.post("/analyze", json={"text": "Доставка запізнилась на тиждень"})
 

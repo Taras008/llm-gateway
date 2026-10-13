@@ -2,6 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
 
@@ -13,10 +14,10 @@ class ChatResponse(BaseModel):
     completion_tokens: int
     latency_ms: int
 
+
 class HealthResponse(BaseModel):
     status: str
     llm_provider: str
-
 
 
 class AnalyzeRequest(BaseModel):

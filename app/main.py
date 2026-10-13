@@ -1,7 +1,7 @@
 import logging
 
 from fastapi import Depends, FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.config import LLM_PROVIDER
 from app.llm.base import LLMProvider
@@ -12,7 +12,7 @@ from app.llm.errors import (
     LLMUnavailableError,
 )
 from app.llm.factory import get_provider
-from app.llm_calls import call_llm, call_llm_structured
+from app.llm_calls import call_llm, call_llm_structured, start_stream
 from app.request_log import RequestLogRepository, get_request_log_repository
 from app.schemas import (
     AnalyzeRequest,
@@ -45,7 +45,9 @@ app = FastAPI(title="llm-gateway")
 @app.exception_handler(LLMError)
 async def handle_llm_error(request: Request, exc: LLMError) -> JSONResponse:
     status_code, detail = LLM_ERROR_RESPONSES.get(type(exc), (502, "LLM provider error"))
-    logger.warning("LLM error on %s %s: %s: %s", request.method, request.url.path, type(exc).__name__, exc)
+    logger.warning(
+        "LLM error on %s %s: %s: %s", request.method, request.url.path, type(exc).__name__, exc
+    )
     return JSONResponse(status_code=status_code, content={"detail": detail})
 
 
@@ -69,6 +71,18 @@ async def chat(
         completion_tokens=call.result.completion_tokens,
         latency_ms=call.latency_ms,
     )
+
+
+@app.post("/chat/stream")
+async def chat_stream(
+    request: ChatRequest,
+    provider: LLMProvider = Depends(get_provider),
+    log_repo: RequestLogRepository = Depends(get_request_log_repository),
+) -> StreamingResponse:
+    chunks = await start_stream(
+        provider, log_repo, endpoint="/chat/stream", message=request.message
+    )
+    return StreamingResponse(chunks, media_type="text/plain; charset=utf-8")
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)

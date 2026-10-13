@@ -1,9 +1,9 @@
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
-from app.llm.base import LLMProvider, LLMResult
+from app.llm.base import LLMProvider, LLMResult, LLMStreamChunk
 from app.llm.errors import LLMUnavailableError
 
 logger = logging.getLogger(__name__)
@@ -54,3 +54,13 @@ class RetryingProvider:
                 await self.sleep(delay)
 
         raise AssertionError("unreachable")  # loop always returns or raises
+
+    def stream(
+        self,
+        message: str,
+        *,
+        system: str | None = None,
+    ) -> AsyncIterator[LLMStreamChunk]:
+        # Стрім не повторюємо: якщо він обірвався посередині, клієнт уже отримав
+        # частину тексту, і повтор продублював би її.
+        return self.inner.stream(message, system=system)
