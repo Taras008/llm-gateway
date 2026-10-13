@@ -1,4 +1,4 @@
-from typing import Protocol
+from typing import Any, Protocol
 
 from pydantic import BaseModel
 
@@ -11,4 +11,10 @@ class LLMResult(BaseModel):
 
 
 class LLMProvider(Protocol):
-    async def chat(self, message: str) -> LLMResult: ...
+    async def chat(
+        self,
+        message: str,
+        *,
+        system: str | None = None,
+        json_schema: dict[str, Any] | None = None,
+    ) -> LLMResult: ...
