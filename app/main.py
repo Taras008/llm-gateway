@@ -1,9 +1,7 @@
 import logging
-import time
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError
 
 from app.config import LLM_PROVIDER
 from app.llm.base import LLMProvider
@@ -14,6 +12,8 @@ from app.llm.errors import (
     LLMUnavailableError,
 )
 from app.llm.factory import get_provider
+from app.llm_calls import call_llm, call_llm_structured
+from app.request_log import RequestLogRepository, get_request_log_repository
 from app.schemas import (
     AnalyzeRequest,
     AnalyzeResponse,
@@ -58,17 +58,16 @@ def health() -> HealthResponse:
 async def chat(
     request: ChatRequest,
     provider: LLMProvider = Depends(get_provider),
+    log_repo: RequestLogRepository = Depends(get_request_log_repository),
 ) -> ChatResponse:
-    start = time.perf_counter()
-    result = await provider.chat(request.message)
-    latency_ms = int((time.perf_counter() - start) * 1000)
+    call = await call_llm(provider, log_repo, endpoint="/chat", message=request.message)
 
     return ChatResponse(
-        answer=result.text,
-        model=result.model,
-        prompt_tokens=result.prompt_tokens,
-        completion_tokens=result.completion_tokens,
-        latency_ms=latency_ms,
+        answer=call.result.text,
+        model=call.result.model,
+        prompt_tokens=call.result.prompt_tokens,
+        completion_tokens=call.result.completion_tokens,
+        latency_ms=call.latency_ms,
     )
 
 
@@ -76,30 +75,21 @@ async def chat(
 async def analyze(
     request: AnalyzeRequest,
     provider: LLMProvider = Depends(get_provider),
+    log_repo: RequestLogRepository = Depends(get_request_log_repository),
 ) -> AnalyzeResponse:
-    start = time.perf_counter()
-    result = await provider.chat(
-        request.text,
+    analysis, call = await call_llm_structured(
+        provider,
+        log_repo,
+        endpoint="/analyze",
+        message=request.text,
         system=ANALYZE_SYSTEM_PROMPT,
-        json_schema=ReviewAnalysis.model_json_schema(),
+        schema=ReviewAnalysis,
     )
-    latency_ms = int((time.perf_counter() - start) * 1000)
-
-    try:
-        analysis = ReviewAnalysis.model_validate_json(result.text)
-    except ValidationError as exc:
-        logger.warning(
-            "Invalid structured output from %s: %s | raw=%r",
-            result.model,
-            exc.errors(include_url=False, include_input=False),
-            result.text[:500],
-        )
-        raise LLMBadResponseError("Structured output failed validation") from exc
 
     return AnalyzeResponse(
         analysis=analysis,
-        model=result.model,
-        prompt_tokens=result.prompt_tokens,
-        completion_tokens=result.completion_tokens,
-        latency_ms=latency_ms,
+        model=call.result.model,
+        prompt_tokens=call.result.prompt_tokens,
+        completion_tokens=call.result.completion_tokens,
+        latency_ms=call.latency_ms,
     )
